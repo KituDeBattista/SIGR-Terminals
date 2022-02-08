@@ -41,6 +41,7 @@ StaticJsonDocument<200> tig;
 
 unsigned long timer, dally;
 
+
 bool flag = 0;
 bool flagCall = 0;
 bool flagAccepted = 0;
@@ -126,25 +127,6 @@ void onMqttPublish(uint16_t packetId) {
 ////////////////////////////////////////// DISPLAY //////////////////////////////////////////
 
 void call(){
-  tig["room"] = "02";
-  tig["bed"] = "08";
-  tig["pacient"] = "Rolhaiser";
-  tig["diagnosis"] = "hola";
-  serializeJson(tig, tigJSON);
-  Serial.println(tigJSON);
-  DeserializationError error = deserializeJson(data, tigJSON);
-
-  if (error) {
-    Serial.print(F("deserializeJson() failed: "));
-    Serial.println(error.f_str());
-    return;
-  }
-
- 
-  bed = data["bed"]; 
-  room = data["room"];
-  pacient = data["pacient"];
-  diagnosis = data["diagnosis"];
   tft.fillRect(0, 32, 128, 26, RED);
   tft.fillRect(0, 58, 128, 54, BLACK);
   tft.fillRect(0, 112, 128, 33, BLUE);
