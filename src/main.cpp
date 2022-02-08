@@ -8,10 +8,11 @@
 #include <ESP8266WiFi.h>
 #include <Ticker.h>
 #include <ArduinoJson.h>
+#include <string.h>
 
 #define WIFI_SSID "Kituuu"
 #define WIFI_PASSWORD "41819096"
-#define MQTT_HOST IPAddress(192, 168, 101, 7)
+#define MQTT_HOST IPAddress(192, 168, 101, 3)
 #define MQTT_PORT 1883
 #define MSG	(5)
 #define TFT_CS         2
@@ -36,8 +37,8 @@ WiFiEventHandler wifiConnectHandler;
 WiFiEventHandler wifiDisconnectHandler;
 Ticker wifiReconnectTimer;
 
-StaticJsonDocument<200> data;
-StaticJsonDocument<200> tig;
+
+
 
 unsigned long timer, dally;
 
@@ -49,14 +50,12 @@ bool flagRejected = 0;
 bool flagMessage = 0;
 
 char msg[MSG];
-char *json;
 
 const char* TIGID = "01";
 const char* bed;
 const char* room;
 const char* pacient;
 const char* diagnosis;
-String tigJSON;
 
 void call();
 void escribir(byte x_pos, byte y_pos, const char *text, byte text_size, uint16_t color);
@@ -116,7 +115,22 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
   Serial.println("Publish received.");
   Serial.println(topic);
   Serial.println(payload);
-  json = payload;
+  StaticJsonDocument<200> data;
+  char *content = "";
+  strcat(content,payload);
+  DeserializationError error = deserializeJson(data, content);
+
+  if (error) {
+    Serial.print(F("deserializeJson() failed: "));
+    Serial.println(error.f_str());
+    return;
+  }
+
+  bed = data["bed"];
+  room = data["room"];
+  pacient = data["pacient"];
+  diagnosis = data["diagnosis"];
+  
   flagMessage = 1;
 }
 
@@ -127,6 +141,10 @@ void onMqttPublish(uint16_t packetId) {
 ////////////////////////////////////////// DISPLAY //////////////////////////////////////////
 
 void call(){
+  //Serial.println(bed);
+  Serial.println(room);
+  Serial.println(pacient);
+  Serial.println(diagnosis);
   tft.fillRect(0, 32, 128, 26, RED);
   tft.fillRect(0, 58, 128, 54, BLACK);
   tft.fillRect(0, 112, 128, 33, BLUE);
@@ -145,9 +163,12 @@ void call(){
   escribir(77,149,"Decline",1,BLACK);
   digitalWrite(0, HIGH);
   flagCall = 1;
+  flagMessage = 0;
 }
 
 void accepted(){
+  StaticJsonDocument<200> tig;
+  String tigJSON = "";
   tft.fillScreen(GREEN);
   escribir(15,89,"ACCEPTED",2,BLACK);
   escribir(16,88,"ACCEPTED",2,WHITE);
@@ -157,22 +178,21 @@ void accepted(){
   tig["answer"] = "A";
   tig["bed"] = bed;
   serializeJson(tig, tigJSON);
-  Serial.println(tigJSON);
   const char* tigmsg = tigJSON.c_str();
   Serial.println(tigmsg);
   mqttClient.publish("SIGR/TIGAnswer", 2, true, tigmsg);
   timer = millis();
   flag = 1;
-  tigJSON = "0";
 }
 
 void rejected(){
+  StaticJsonDocument<200> tig;
+  String tigJSON = "";
   tft.fillScreen(RED);
   escribir(15,89,"REJECTED",2,WHITE);
   escribir(16,88,"REJECTED",2,BLACK);
   digitalWrite(0, HIGH);
   Serial.println("Rejected");
-  Serial.println("Accepted");
   tig["TIGID"] = TIGID;
   tig["answer"] = "D";
   tig["bed"] = bed;
@@ -181,7 +201,6 @@ void rejected(){
   mqttClient.publish("SIGR/TIGAnswer", 2, true, tigmsg);
   timer = millis();
   flag = 1;
-  tigJSON = "0";
 }
 
 void escribir(byte x_pos, byte y_pos, const char *text, byte text_size, uint16_t color) {
@@ -263,26 +282,7 @@ void loop(){
     digitalWrite(0, LOW);
   }
   if (flagMessage == 1){
-    JSON();
     dally = millis();
     call();
   }
-}
-
-
-void JSON (){
-  DeserializationError error = deserializeJson(data, json);
-
-  if (error) {
-    Serial.print(F("deserializeJson() failed: "));
-    Serial.println(error.f_str());
-    return;
-  }
-
-  bed = data["bed"];
-  room = data["room"];
-  pacient = data["pacient"];
-  diagnosis = data["diagnosis"];
-  
-  flagMessage = 0;
 }
