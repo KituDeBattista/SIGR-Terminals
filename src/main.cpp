@@ -12,7 +12,7 @@
 
 #define WIFI_SSID "Kituuu"
 #define WIFI_PASSWORD "41819096"
-#define MQTT_HOST IPAddress(192, 168, 101, 3)
+#define MQTT_HOST IPAddress(192, 168, 101, 12)
 #define MQTT_PORT 1883
 #define MSG	(5)
 #define TFT_CS         2
@@ -37,31 +37,28 @@ WiFiEventHandler wifiConnectHandler;
 WiFiEventHandler wifiDisconnectHandler;
 Ticker wifiReconnectTimer;
 
-
-
-
 unsigned long timer, dally;
-
 
 bool flag = 0;
 bool flagCall = 0;
 bool flagAccepted = 0;
 bool flagRejected = 0;
 bool flagMessage = 0;
-
-char msg[MSG];
+bool flagReminder = 0;
+bool flagTerminated = 0;
 
 const char* TIGID = "01";
 const char* bed;
 const char* room;
-const char* pacient;
+const char* patient;
 const char* diagnosis;
 
 void call();
 void escribir(byte x_pos, byte y_pos, const char *text, byte text_size, uint16_t color);
 void accepted();
 void rejected();
-void JSON();
+void reminder();
+void finish();
 IRAM_ATTR void interruptAccepted();
 IRAM_ATTR void interruptRejected();
 
@@ -116,8 +113,12 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
   Serial.println(topic);
   Serial.println(payload);
   StaticJsonDocument<200> data;
-  char *content = "";
-  strcat(content,payload);
+  String content = "";
+  for(size_t i = 0; i < len; i++)
+  {
+    content.concat(payload[i]);
+  }
+  
   DeserializationError error = deserializeJson(data, content);
 
   if (error) {
@@ -128,7 +129,7 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
 
   bed = data["bed"];
   room = data["room"];
-  pacient = data["pacient"];
+  patient = data["patient"];
   diagnosis = data["diagnosis"];
   
   flagMessage = 1;
@@ -141,10 +142,6 @@ void onMqttPublish(uint16_t packetId) {
 ////////////////////////////////////////// DISPLAY //////////////////////////////////////////
 
 void call(){
-  //Serial.println(bed);
-  Serial.println(room);
-  Serial.println(pacient);
-  Serial.println(diagnosis);
   tft.fillRect(0, 32, 128, 26, RED);
   tft.fillRect(0, 58, 128, 54, BLACK);
   tft.fillRect(0, 112, 128, 33, BLUE);
@@ -154,10 +151,10 @@ void call(){
   tft.fillRect(64, 145, 64, 19, RED); 
   escribir(25,37,"C A L L",2,WHITE);
   escribir(19,62,"ROOM",1,WHITE);
-  escribir(89,62,"BED",1,WHITE);
+  escribir(91,62,"BED",1,WHITE);
   escribir(8,76, room,4,CYAN);
-  escribir(76,76, bed,4,CYAN);
-  escribir(3,117, pacient,1,WHITE);
+  escribir(74,76, bed,4,CYAN);
+  escribir(3,117, patient,1,WHITE);
   escribir(3,131, diagnosis,1,WHITE);
   escribir(16, 149,"Acept",1,BLACK);
   escribir(77,149,"Decline",1,BLACK);
@@ -212,6 +209,43 @@ void escribir(byte x_pos, byte y_pos, const char *text, byte text_size, uint16_t
   return;
 }
 
+void reminder(){
+  tft.fillRect(0, 32, 128, 80, BLACK);
+  tft.fillRect(0, 112, 128, 33, BLUE);
+  tft.fillRect(0, 143, 128, 2, BLACK);
+  tft.fillRect(63, 40, 2, 60, WHITE);
+  tft.fillRect(0, 145, 128, 19, CYAN); 
+  escribir(19,42,"ROOM",1,WHITE);
+  escribir(91,42,"BED",1,WHITE);
+  escribir(8,66, room,4,CYAN);
+  escribir(74,66, bed,4,CYAN);
+  escribir(3,117, patient,1,WHITE);
+  escribir(3,131, diagnosis,1,WHITE);
+  escribir(48,149,"Finish",1,BLACK);
+  digitalWrite(0, HIGH);
+  flagReminder = 1;
+  flag = 1;
+  timer = millis();
+}
+
+void finish(){
+  StaticJsonDocument<200> tig;
+  String tigJSON = "";
+  tft.fillScreen(BLACK);
+  escribir(30,89,"FINISH",2,WHITE);
+  escribir(31,88,"FINISH",2,GREEN);
+  digitalWrite(0, HIGH);
+  Serial.println("FINISH");
+  tig["TIGID"] = TIGID;
+  tig["answer"] = "F";
+  tig["bed"] = bed;
+  serializeJson(tig, tigJSON);
+  const char* tigmsg = tigJSON.c_str();
+  Serial.println(tigmsg);
+  mqttClient.publish("SIGR/TIGAnswer", 2, true, tigmsg);
+  timer = millis();
+  flagTerminated = 1;
+}
 ////////////////////////////////////////// SETUP //////////////////////////////////////////
 
 void setup() {
@@ -253,17 +287,24 @@ IRAM_ATTR void interruptRejected(){
 /////////////////////////////////////////////// LOOP ///////////////////////////////////////////////
 
 void loop(){
+  if (flagMessage == 1){
+    dally = millis();
+    call();
+  }
+
   if (flagCall == 1){
     if (flagAccepted == 1){
       if (flag == 0){
         accepted();
       }
-      if(millis() - timer >= 2000){
+      if(flag == 1 && millis() - timer >= 2000){
         flagAccepted = 0;
         flagCall = 0;
         flag = 0;
+        reminder();
       }
     }
+    
     if (flagRejected == 1){
       if (flag == 0){
         rejected();
@@ -272,17 +313,45 @@ void loop(){
         flagRejected = 0;
         flagCall = 0;
         flag = 0;
+        digitalWrite(0, LOW);
       }
     }
-    if(millis() - dally >= 15000 && flagAccepted == 0 && flagRejected == 0){
+    
+    if(millis() - dally >= 15000){
       flagCall = 0;
+      digitalWrite(0, LOW);
     }
   }
-  else{
-    digitalWrite(0, LOW);
+
+  if (flagReminder == 1){
+    if (flag == 1){
+      digitalWrite(0, HIGH);
+      if (flagAccepted == 1 || flagRejected == 1){
+        flagReminder = 0;
+        flag = 0;
+        flagAccepted = 0;
+        flagRejected = 0;
+        finish();
+      }
+      
+      if(millis() - timer >= 5000 && flag == 1){    
+        digitalWrite(0, LOW);
+        flag = 0;
+      }
+    }
+    
+    if (flagAccepted == 1 || flagRejected == 1){
+      flag = 1;
+      flagAccepted = 0;
+      flagRejected = 0;
+      timer = millis();
+    }
   }
-  if (flagMessage == 1){
-    dally = millis();
-    call();
+  
+  if (flagTerminated == 1){
+    if(millis() - timer >= 2000){
+      digitalWrite(0, LOW);
+      flagTerminated = 0;
+    }
   }
 }
