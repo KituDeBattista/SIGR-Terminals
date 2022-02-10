@@ -128,8 +128,13 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
   }
 
   ID = data["ID"];
-  
-  if (ID == TIGID){
+  //const char IDC = *ID;
+  //const char TIGIDC = *TIGID;
+  Serial.println(ID);
+  Serial.println(TIGID);
+
+  if (*ID == *TIGID){
+    Serial.println("Entro al if");
     bed = data["bed"];
     room = data["room"];
     patient = data["patient"];
