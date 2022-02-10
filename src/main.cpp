@@ -37,7 +37,7 @@ WiFiEventHandler wifiConnectHandler;
 WiFiEventHandler wifiDisconnectHandler;
 Ticker wifiReconnectTimer;
 
-unsigned long timer, dally;
+unsigned long timer, dally, debounce;
 
 bool flag = 0;
 bool flagCall = 0;
@@ -48,6 +48,7 @@ bool flagReminder = 0;
 bool flagTerminated = 0;
 
 const char* TIGID = "01";
+const char* ID;
 const char* bed;
 const char* room;
 const char* patient;
@@ -113,11 +114,10 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
   Serial.println(topic);
   Serial.println(payload);
   StaticJsonDocument<200> data;
-  String content = "";
-  for(size_t i = 0; i < len; i++)
-  {
-    content.concat(payload[i]);
-  }
+  char content [len]= "";
+  
+  strcat(content,"");
+  strcat(content, payload);
   
   DeserializationError error = deserializeJson(data, content);
 
@@ -127,12 +127,15 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     return;
   }
 
-  bed = data["bed"];
-  room = data["room"];
-  patient = data["patient"];
-  diagnosis = data["diagnosis"];
+  ID = data["ID"];
   
-  flagMessage = 1;
+  if (ID == TIGID){
+    bed = data["bed"];
+    room = data["room"];
+    patient = data["patient"];
+    diagnosis = data["diagnosis"];
+    flagMessage = 1;
+  }
 }
 
 void onMqttPublish(uint16_t packetId) {
@@ -277,11 +280,17 @@ void setup() {
 ////////////////////////////////////////// INTERRUPTIONS //////////////////////////////////////////
 
 IRAM_ATTR void interruptAccepted(){
-  flagAccepted = 1;
+  if (millis() - debounce > 150){
+    flagAccepted = 1;
+    debounce = millis();
+  }
 }
 
 IRAM_ATTR void interruptRejected(){
-  flagRejected = 1;
+  if (millis() - debounce > 150){
+    flagRejected = 1;
+    debounce = millis();
+  }
 }
 
 /////////////////////////////////////////////// LOOP ///////////////////////////////////////////////
