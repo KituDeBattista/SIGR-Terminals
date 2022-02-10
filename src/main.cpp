@@ -20,6 +20,7 @@
 #define TFT_DC         12
 #define TFT_MOSI 13  // Data out
 #define TFT_SCLK 15  // Clock out
+#define ondisplay 0
 // Color definitions
 #define BLACK 0x0000
 #define RED 0x001F
@@ -41,13 +42,13 @@ unsigned long timer, dally, debounce;
 
 bool flag = 0;
 bool flagCall = 0;
-bool flagAccepted = 0;
-bool flagRejected = 0;
-bool flagMessage = 0;
+volatile bool flagAccepted = 0;
+volatile bool flagRejected = 0;
 bool flagReminder = 0;
 bool flagTerminated = 0;
+bool flagMessage = 0;
 
-const char* TIGID = "01";
+const char* TIGID = "02";
 const char* ID;
 const char* bed;
 const char* room;
@@ -128,13 +129,8 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
   }
 
   ID = data["ID"];
-  //const char IDC = *ID;
-  //const char TIGIDC = *TIGID;
-  Serial.println(ID);
-  Serial.println(TIGID);
 
   if (*ID == *TIGID){
-    Serial.println("Entro al if");
     bed = data["bed"];
     room = data["room"];
     patient = data["patient"];
@@ -166,9 +162,11 @@ void call(){
   escribir(3,131, diagnosis,1,WHITE);
   escribir(16, 149,"Acept",1,BLACK);
   escribir(77,149,"Decline",1,BLACK);
-  digitalWrite(0, HIGH);
+  digitalWrite(ondisplay, HIGH);
   flagCall = 1;
   flagMessage = 0;
+  attachInterrupt(digitalPinToInterrupt(4), interruptAccepted, FALLING);
+  attachInterrupt(digitalPinToInterrupt(5), interruptRejected, FALLING);
 }
 
 void accepted(){
@@ -177,7 +175,7 @@ void accepted(){
   tft.fillScreen(GREEN);
   escribir(15,89,"ACCEPTED",2,BLACK);
   escribir(16,88,"ACCEPTED",2,WHITE);
-  digitalWrite(0, HIGH);
+  digitalWrite(ondisplay, HIGH);
   Serial.println("Accepted");
   tig["TIGID"] = TIGID;
   tig["answer"] = "A";
@@ -196,7 +194,7 @@ void rejected(){
   tft.fillScreen(RED);
   escribir(15,89,"REJECTED",2,WHITE);
   escribir(16,88,"REJECTED",2,BLACK);
-  digitalWrite(0, HIGH);
+  digitalWrite(ondisplay, HIGH);
   Serial.println("Rejected");
   tig["TIGID"] = TIGID;
   tig["answer"] = "D";
@@ -218,22 +216,26 @@ void escribir(byte x_pos, byte y_pos, const char *text, byte text_size, uint16_t
 }
 
 void reminder(){
+  if (flagReminder == 1){
+    escribir(48,149,"Finish",1,BLACK);
+    tft.fillRect(0, 145, 128, 19, CYAN);
+  }
   tft.fillRect(0, 32, 128, 80, BLACK);
   tft.fillRect(0, 112, 128, 33, BLUE);
-  tft.fillRect(0, 143, 128, 2, BLACK);
-  tft.fillRect(63, 40, 2, 60, WHITE);
-  tft.fillRect(0, 145, 128, 19, CYAN); 
+  tft.fillRect(0, 143, 128, 25, BLACK);
+  tft.fillRect(63, 40, 2, 60, WHITE); 
   escribir(19,42,"ROOM",1,WHITE);
   escribir(91,42,"BED",1,WHITE);
   escribir(8,66, room,4,CYAN);
   escribir(74,66, bed,4,CYAN);
   escribir(3,117, patient,1,WHITE);
   escribir(3,131, diagnosis,1,WHITE);
-  escribir(48,149,"Finish",1,BLACK);
-  digitalWrite(0, HIGH);
+  digitalWrite(ondisplay, HIGH);
   flagReminder = 1;
   flag = 1;
   timer = millis();
+  attachInterrupt(digitalPinToInterrupt(4), interruptAccepted, FALLING);
+  attachInterrupt(digitalPinToInterrupt(5), interruptRejected, FALLING);
 }
 
 void finish(){
@@ -242,7 +244,7 @@ void finish(){
   tft.fillScreen(BLACK);
   escribir(30,89,"FINISH",2,WHITE);
   escribir(31,88,"FINISH",2,GREEN);
-  digitalWrite(0, HIGH);
+  digitalWrite(ondisplay, HIGH);
   Serial.println("FINISH");
   tig["TIGID"] = TIGID;
   tig["answer"] = "F";
@@ -273,11 +275,9 @@ void setup() {
   mqttClient.setServer(MQTT_HOST, MQTT_PORT);
   
   connectToWifi();
-  pinMode(0, OUTPUT);
+  pinMode(ondisplay, OUTPUT);
   pinMode(4, INPUT_PULLUP);
   pinMode(5, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(4), interruptAccepted, FALLING);
-  attachInterrupt(digitalPinToInterrupt(5), interruptRejected, FALLING);
   tft.initR(INITR_BLACKTAB); 
   tft.setRotation(0); // set display orientation
 }
@@ -305,10 +305,11 @@ void loop(){
     dally = millis();
     call();
   }
-
   if (flagCall == 1){
     if (flagAccepted == 1){
       if (flag == 0){
+        detachInterrupt(4);
+        detachInterrupt(5);
         accepted();
       }
       if(flag == 1 && millis() - timer >= 2000){
@@ -321,26 +322,30 @@ void loop(){
     
     if (flagRejected == 1){
       if (flag == 0){
+        detachInterrupt(4);
+        detachInterrupt(5);
         rejected();
       }
       if(millis() - timer >= 2000){
         flagRejected = 0;
         flagCall = 0;
         flag = 0;
-        digitalWrite(0, LOW);
+        digitalWrite(ondisplay, LOW);
       }
     }
     
     if(millis() - dally >= 15000){
       flagCall = 0;
-      digitalWrite(0, LOW);
+      digitalWrite(ondisplay, LOW);
     }
   }
 
   if (flagReminder == 1){
     if (flag == 1){
-      digitalWrite(0, HIGH);
+      digitalWrite(ondisplay, HIGH);
       if (flagAccepted == 1 || flagRejected == 1){
+        detachInterrupt(4);
+        detachInterrupt(5);
         flagReminder = 0;
         flag = 0;
         flagAccepted = 0;
@@ -349,7 +354,7 @@ void loop(){
       }
       
       if(millis() - timer >= 5000 && flag == 1){    
-        digitalWrite(0, LOW);
+        digitalWrite(ondisplay, LOW);
         flag = 0;
       }
     }
@@ -364,7 +369,7 @@ void loop(){
   
   if (flagTerminated == 1){
     if(millis() - timer >= 2000){
-      digitalWrite(0, LOW);
+      digitalWrite(ondisplay, LOW);
       flagTerminated = 0;
     }
   }
