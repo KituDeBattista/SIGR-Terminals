@@ -15,12 +15,13 @@
 #define MQTT_HOST IPAddress(192, 168, 101, 12)
 #define MQTT_PORT 1883
 #define MSG	(5)
-#define TFT_CS         2
-#define TFT_RST        14                                            
-#define TFT_DC         12
+#define TFT_CS         2 
+#define TFT_RST        14                                          
+#define TFT_DC         12 
 #define TFT_MOSI 13  // Data out
 #define TFT_SCLK 15  // Clock out
 #define ondisplay 0
+
 // Color definitions
 #define BLACK 0x0000
 #define RED 0x001F
@@ -49,11 +50,12 @@ bool flagTerminated = 0;
 bool flagMessage = 0;
 
 const char* TIGID = "02";
-const char* ID;
 const char* bed;
+const char* ID;
 const char* room;
 const char* patient;
 const char* diagnosis;
+
 
 void call();
 void escribir(byte x_pos, byte y_pos, const char *text, byte text_size, uint16_t color);
@@ -117,26 +119,31 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
   StaticJsonDocument<200> data;
   char content [len]= "";
   
-  strcat(content,"");
-  strcat(content, payload);
+  char idtig[3] = "02";
+  Serial.println(payload[7]);
+  Serial.println(payload[8]);
+
+  if(payload[7] == idtig[0] && payload[8] == idtig[1]){
+    strcat(content,"");
+    strcat(content, payload);
+    DeserializationError error = deserializeJson(data, content);
+    if (error) {
+      Serial.print(F("deserializeJson() failed: "));
+      Serial.println(error.f_str());
+      return;
+    }
+    ID = data["ID"];
+    if(!strcmp(ID,TIGID)){
+      Serial.println("Entra al if por que coincide ID");
+      bed = data["bed"];
+      room = data["room"];
+      patient = data["patient"];
+      diagnosis = data["diagnosis"];
+      flagMessage = 1;
+    }
+  }
+
   
-  DeserializationError error = deserializeJson(data, content);
-
-  if (error) {
-    Serial.print(F("deserializeJson() failed: "));
-    Serial.println(error.f_str());
-    return;
-  }
-
-  ID = data["ID"];
-
-  if (*ID == *TIGID){
-    bed = data["bed"];
-    room = data["room"];
-    patient = data["patient"];
-    diagnosis = data["diagnosis"];
-    flagMessage = 1;
-  }
 }
 
 void onMqttPublish(uint16_t packetId) {
@@ -301,10 +308,11 @@ IRAM_ATTR void interruptRejected(){
 /////////////////////////////////////////////// LOOP ///////////////////////////////////////////////
 
 void loop(){
-  if (flagMessage == 1){
+  if (flagMessage == 1){ 
     dally = millis();
     call();
   }
+  
   if (flagCall == 1){
     if (flagAccepted == 1){
       if (flag == 0){
@@ -334,15 +342,26 @@ void loop(){
       }
     }
     
-    if(millis() - dally >= 15000){
-      flagCall = 0;
+    if(millis() - dally >= 10000){
+      StaticJsonDocument<200> tig;
+      String tigJSON = "";
       digitalWrite(ondisplay, LOW);
+      tig["TIGID"] = TIGID;
+      tig["answer"] = "T";
+      tig["bed"] = bed;
+      serializeJson(tig, tigJSON);
+      const char* tigmsg = tigJSON.c_str();
+      Serial.println(tigmsg);
+      mqttClient.publish("SIGR/TIGAnswer", 2, true, tigmsg);
+      flagCall = 0;
     }
   }
 
   if (flagReminder == 1){
     if (flag == 1){
       digitalWrite(ondisplay, HIGH);
+      Serial.println("reminder prender pantalla ");
+      Serial.println(bed);
       if (flagAccepted == 1 || flagRejected == 1){
         detachInterrupt(4);
         detachInterrupt(5);
