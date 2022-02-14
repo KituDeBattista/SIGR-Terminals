@@ -12,7 +12,7 @@
 
 #define WIFI_SSID "Kituuu"
 #define WIFI_PASSWORD "41819096"
-#define MQTT_HOST IPAddress(192, 168, 101, 12)
+#define MQTT_HOST IPAddress(192, 168, 101, 7)
 #define MQTT_PORT 1883
 #define MSG	(5)
 #define TFT_CS         2 
@@ -113,37 +113,33 @@ void onMqttUnsubscribe(uint16_t packetId) {
 }
 
 void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
+  StaticJsonDocument<200> data;
   Serial.println("Publish received.");
   Serial.println(topic);
   Serial.println(payload);
-  StaticJsonDocument<200> data;
-  char content [len]= "";
   
+  char content [len]= "";
   char idtig[3] = "02";
-  Serial.println(payload[7]);
-  Serial.println(payload[8]);
 
   if(payload[7] == idtig[0] && payload[8] == idtig[1]){
-    strcat(content,"");
+    Serial.println("########## COINCIDE ID ##########");
     strcat(content, payload);
+    Serial.println(content);
     DeserializationError error = deserializeJson(data, content);
     if (error) {
       Serial.print(F("deserializeJson() failed: "));
       Serial.println(error.f_str());
       return;
     }
-    ID = data["ID"];
-    if(!strcmp(ID,TIGID)){
-      Serial.println("Entra al if por que coincide ID");
-      bed = data["bed"];
-      room = data["room"];
-      patient = data["patient"];
-      diagnosis = data["diagnosis"];
-      flagMessage = 1;
-    }
+    
+    bed = data["bed"];
+    room = data["room"];
+    patient = data["patient"];
+    diagnosis = data["diagnosis"];
+    flagMessage = 1;
   }
 
-  
+  data.clear();
 }
 
 void onMqttPublish(uint16_t packetId) {
