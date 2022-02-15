@@ -12,7 +12,7 @@
 
 #define WIFI_SSID "Kituuu"
 #define WIFI_PASSWORD "41819096"
-#define MQTT_HOST IPAddress(192, 168, 101, 7)
+#define MQTT_HOST IPAddress(172, 21, 3, 156)
 #define MQTT_PORT 1883
 #define MSG	(5)
 #define TFT_CS         2 
@@ -49,7 +49,8 @@ bool flagReminder = 0;
 bool flagTerminated = 0;
 bool flagMessage = 0;
 
-const char* TIGID = "02";
+const char* const TIGID = "02";
+char bedArray[] = "00";
 const char* bed;
 const char* ID;
 const char* room;
@@ -113,18 +114,24 @@ void onMqttUnsubscribe(uint16_t packetId) {
 }
 
 void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total) {
-  StaticJsonDocument<200> data;
+  Serial.println("Publish received.0");
+  Serial.println(bed);
+  Serial.println(bedArray);
+  DynamicJsonDocument data(200);
   Serial.println("Publish received.");
-  Serial.println(topic);
-  Serial.println(payload);
+  //Serial.println(topic);
+  //Serial.println(payload);
+  Serial.println(bed);
+  Serial.println(bedArray);
   
+
+
   char content [len]= "";
   char idtig[3] = "02";
 
   if(payload[7] == idtig[0] && payload[8] == idtig[1]){
     Serial.println("########## COINCIDE ID ##########");
     strcat(content, payload);
-    Serial.println(content);
     DeserializationError error = deserializeJson(data, content);
     if (error) {
       Serial.print(F("deserializeJson() failed: "));
@@ -132,14 +139,16 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
       return;
     }
     
+    strcpy(bedArray, data["bed"]);
     bed = data["bed"];
     room = data["room"];
     patient = data["patient"];
     diagnosis = data["diagnosis"];
     flagMessage = 1;
   }
-
+  Serial.println(bed);
   data.clear();
+  Serial.println(bed);
 }
 
 void onMqttPublish(uint16_t packetId) {
@@ -173,7 +182,7 @@ void call(){
 }
 
 void accepted(){
-  StaticJsonDocument<200> tig;
+  DynamicJsonDocument tig(200);
   String tigJSON = "";
   tft.fillScreen(GREEN);
   escribir(15,89,"ACCEPTED",2,BLACK);
@@ -189,10 +198,11 @@ void accepted(){
   mqttClient.publish("SIGR/TIGAnswer", 2, true, tigmsg);
   timer = millis();
   flag = 1;
+  tig.clear();
 }
 
 void rejected(){
-  StaticJsonDocument<200> tig;
+  DynamicJsonDocument tig(200);
   String tigJSON = "";
   tft.fillScreen(RED);
   escribir(15,89,"REJECTED",2,WHITE);
@@ -207,6 +217,7 @@ void rejected(){
   mqttClient.publish("SIGR/TIGAnswer", 2, true, tigmsg);
   timer = millis();
   flag = 1;
+  tig.clear();
 }
 
 void escribir(byte x_pos, byte y_pos, const char *text, byte text_size, uint16_t color) {
@@ -219,20 +230,21 @@ void escribir(byte x_pos, byte y_pos, const char *text, byte text_size, uint16_t
 }
 
 void reminder(){
+  tft.fillRect(0, 32, 128, 19, CYAN);
+  tft.fillRect(0, 51, 128, 109, BLACK);
+  tft.fillRect(0, 110, 128, 33, BLUE);
+  tft.fillRect(0, 145, 128, 15, CYAN);  
+  escribir(22,38,"ROOM",1,BLACK);
+  escribir(87,38,"BED",1,BLACK);
+  escribir(9,67, room,4,WHITE);
+  escribir(8,66, room,4,BLUE);
+  escribir(75,67, bed,4,WHITE);
+  escribir(74,66, bed,4,BLUE);
+  escribir(3,115, patient,1,WHITE);
+  escribir(3,130, diagnosis,1,WHITE);
   if (flagReminder == 1){
-    escribir(48,149,"Finish",1,BLACK);
-    tft.fillRect(0, 145, 128, 19, CYAN);
+    escribir(48,149,"Finish",1,BLACK); 
   }
-  tft.fillRect(0, 32, 128, 80, BLACK);
-  tft.fillRect(0, 112, 128, 33, BLUE);
-  tft.fillRect(0, 143, 128, 25, BLACK);
-  tft.fillRect(63, 40, 2, 60, WHITE); 
-  escribir(19,42,"ROOM",1,WHITE);
-  escribir(91,42,"BED",1,WHITE);
-  escribir(8,66, room,4,CYAN);
-  escribir(74,66, bed,4,CYAN);
-  escribir(3,117, patient,1,WHITE);
-  escribir(3,131, diagnosis,1,WHITE);
   digitalWrite(ondisplay, HIGH);
   flagReminder = 1;
   flag = 1;
@@ -242,7 +254,8 @@ void reminder(){
 }
 
 void finish(){
-  StaticJsonDocument<200> tig;
+  DynamicJsonDocument tig(200);
+  // StaticJsonDocument<200> tig;
   String tigJSON = "";
   tft.fillScreen(BLACK);
   escribir(30,89,"FINISH",2,WHITE);
@@ -258,6 +271,7 @@ void finish(){
   mqttClient.publish("SIGR/TIGAnswer", 2, true, tigmsg);
   timer = millis();
   flagTerminated = 1;
+  tig.clear();
 }
 ////////////////////////////////////////// SETUP //////////////////////////////////////////
 
@@ -314,12 +328,16 @@ void loop(){
       if (flag == 0){
         detachInterrupt(4);
         detachInterrupt(5);
+        Serial.println("Estamos en por llamar a acepted");
+        Serial.println(bed);
         accepted();
       }
       if(flag == 1 && millis() - timer >= 2000){
         flagAccepted = 0;
         flagCall = 0;
         flag = 0;
+        Serial.println("Estamos en acepted por llamar a reminder");
+        Serial.println(bed);
         reminder();
       }
     }
@@ -339,7 +357,7 @@ void loop(){
     }
     
     if(millis() - dally >= 10000){
-      StaticJsonDocument<200> tig;
+      DynamicJsonDocument tig(200);
       String tigJSON = "";
       digitalWrite(ondisplay, LOW);
       tig["TIGID"] = TIGID;
@@ -350,14 +368,13 @@ void loop(){
       Serial.println(tigmsg);
       mqttClient.publish("SIGR/TIGAnswer", 2, true, tigmsg);
       flagCall = 0;
+      tig.clear();
     }
   }
 
   if (flagReminder == 1){
     if (flag == 1){
       digitalWrite(ondisplay, HIGH);
-      Serial.println("reminder prender pantalla ");
-      Serial.println(bed);
       if (flagAccepted == 1 || flagRejected == 1){
         detachInterrupt(4);
         detachInterrupt(5);
@@ -365,11 +382,15 @@ void loop(){
         flag = 0;
         flagAccepted = 0;
         flagRejected = 0;
+        Serial.println("Estamos en reminder");
+        Serial.println(bed);
         finish();
       }
       
       if(millis() - timer >= 5000 && flag == 1){    
         digitalWrite(ondisplay, LOW);
+        Serial.println("Estamos en reminder por apagar la pantalla");
+        Serial.println(bed);
         flag = 0;
       }
     }
