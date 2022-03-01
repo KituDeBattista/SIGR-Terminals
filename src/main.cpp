@@ -67,9 +67,19 @@ void reminder();
 void finish();
 void timeOut();
 void OFFDisplay();
-void publish(const char *answer);
+void publish(const char *);
 IRAM_ATTR void interruptAccepted();
 IRAM_ATTR void interruptRejected();
+void connectToWifi();
+void connectToMqtt();
+void onWifiConnect(const WiFiEventStationModeGotIP &);
+void onWifiDisconnect(const WiFiEventStationModeDisconnected &);
+void onMqttConnect(bool);
+void onMqttDisconnect(AsyncMqttClientDisconnectReason);
+void onMqttSubscribe(uint16_t, uint8_t);
+void onMqttUnsubscribe(uint16_t);
+void onMqttMessage(char *, char *, AsyncMqttClientMessageProperties, size_t, size_t, size_t);
+void onMqttPublish(uint16_t);
 
 Adafruit_ST7735 tft = Adafruit_ST7735(TFT_CS, TFT_DC, TFT_MOSI, TFT_SCLK, TFT_RST);
 
@@ -372,6 +382,8 @@ IRAM_ATTR void interruptRejected()
 
 void loop()
 {
+  publish("A");
+  delay(3000);
   if (flagMessage == 1)
   {
     call();
