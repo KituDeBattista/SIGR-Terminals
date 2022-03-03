@@ -1,3 +1,9 @@
+/* ###############################################################################################
+//                               PROYECTO DE SISTEMAS DIGITALES
+//                           DE BATTISTA CRISTIAN -- JHONSTON DAVID
+//                         SISTEMA INTELIGENTE DE GESTION DE RECURSOS
+############################################################################################### */
+
 ////////////////////////////////////////// DECLARATIONS //////////////////////////////////////////
 
 #include <Arduino.h>
@@ -12,7 +18,7 @@
 
 #define WIFI_SSID "Kituuu"
 #define WIFI_PASSWORD "41819096"
-#define MQTT_HOST IPAddress(192, 168, 101, 6)
+#define MQTT_HOST IPAddress(192, 168, 101, 3)
 #define MQTT_PORT 1883
 #define TFT_CS 2
 #define TFT_RST 14
@@ -244,23 +250,23 @@ void call()
 
 void accepted()
 {
+  publish("A");
   TickerTimeOut.detach();
   tft.fillScreen(GREEN);
   escribir(15, 89, "ACCEPTED", 2, BLACK);
   escribir(16, 88, "ACCEPTED", 2, WHITE);
   digitalWrite(ondisplay, HIGH);
-  publish("A");
   reminder();
 }
 
 void rejected()
 {
+  publish("D");
   TickerTimeOut.detach();
   tft.fillScreen(RED);
   escribir(15, 89, "REJECTED", 2, WHITE);
   escribir(16, 88, "REJECTED", 2, BLACK);
   digitalWrite(ondisplay, HIGH);
-  publish("D");
   TickerOFFDisplay.attach(3, OFFDisplay);
 }
 
@@ -305,11 +311,11 @@ void reminder()
 
 void finish()
 {
+  publish("F");
   tft.fillScreen(BLACK);
   escribir(30, 89, "FINISH", 2, WHITE);
   escribir(31, 88, "FINISH", 2, GREEN);
   digitalWrite(ondisplay, HIGH);
-  publish("F");
   TickerOFFDisplay.attach(3, OFFDisplay);
 }
 
@@ -343,9 +349,9 @@ void publish(const char *answer)
 
 void timeOut()
 {
-  digitalWrite(ondisplay, LOW);
   publish("T");
   TickerTimeOut.detach();
+  digitalWrite(ondisplay, LOW);
 }
 
 void OFFDisplay()
@@ -382,8 +388,6 @@ IRAM_ATTR void interruptRejected()
 
 void loop()
 {
-  publish("A");
-  delay(3000);
   if (flagMessage == 1)
   {
     call();
